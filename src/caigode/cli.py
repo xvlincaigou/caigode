@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 
 from .config import ConfigError, load_config
+from .interface.review_handler import handle_review
 from .interface.run_handler import handle_run
 from .interface.status_handler import handle_status
 
@@ -17,10 +18,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="caigode")
     subparsers = parser.add_subparsers(dest="command")
 
-    for command_name in ("chat", "review"):
-        subparser = subparsers.add_parser(command_name, help=_command_help(command_name))
-        _add_config_arguments(subparser)
-        subparser.set_defaults(handler=_build_placeholder_handler(command_name))
+    chat_parser = subparsers.add_parser("chat", help=_command_help("chat"))
+    _add_config_arguments(chat_parser)
+    chat_parser.set_defaults(handler=_build_placeholder_handler("chat"))
+
+    review_parser = subparsers.add_parser("review", help=_command_help("review"))
+    _add_workspace_arguments(review_parser)
+    review_parser.add_argument(
+        "--session-id",
+        help="Persisted session id to review. Defaults to the latest session.",
+    )
+    review_parser.set_defaults(handler=handle_review)
 
     run_parser = subparsers.add_parser("run", help=_command_help("run"))
     _add_config_arguments(run_parser)
