@@ -6,7 +6,8 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from .config import ConfigError, load_config
+from .config import ConfigError
+from .interface.repl import handle_chat
 from .interface.review_handler import handle_review
 from .interface.run_handler import handle_run
 from .interface.status_handler import handle_status
@@ -20,7 +21,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     chat_parser = subparsers.add_parser("chat", help=_command_help("chat"))
     _add_config_arguments(chat_parser)
-    chat_parser.set_defaults(handler=_build_placeholder_handler("chat"))
+    chat_parser.add_argument(
+        "--context-file",
+        action="append",
+        default=[],
+        help="Workspace-relative file to read before each turn. Repeatable.",
+    )
+    chat_parser.add_argument(
+        "--verify",
+        action="append",
+        default=[],
+        help="Verification command to run after file writes on each turn. Repeatable.",
+    )
+    chat_parser.set_defaults(handler=handle_chat)
 
     review_parser = subparsers.add_parser("review", help=_command_help("review"))
     _add_workspace_arguments(review_parser)
@@ -86,24 +99,6 @@ def _add_workspace_arguments(parser: argparse.ArgumentParser) -> None:
         "--state-dir",
         help="Directory used to persist session state and artifacts.",
     )
-
-
-def _build_placeholder_handler(command_name: str):
-    def handler(args: argparse.Namespace) -> int:
-        config = load_config(
-            model=args.model,
-            base_url=args.base_url,
-            api_key=args.api_key,
-            workspace=args.workspace,
-            state_dir=args.state_dir,
-        )
-        print(
-            f"{command_name} command is not implemented yet. "
-            f"Workspace: {config.workspace}"
-        )
-        return 0
-
-    return handler
 
 
 def _command_help(command_name: str) -> str:
