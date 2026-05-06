@@ -10,3 +10,9 @@
 
 # macOS
 .DS_Store
+
+# pycache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
