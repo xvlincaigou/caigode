@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 
 from .config import ConfigError, load_config
+from .interface.status_handler import handle_status
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -15,10 +16,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="caigode")
     subparsers = parser.add_subparsers(dest="command")
 
-    for command_name in ("chat", "run", "status", "review"):
+    for command_name in ("chat", "run", "review"):
         subparser = subparsers.add_parser(command_name, help=_command_help(command_name))
         _add_config_arguments(subparser)
         subparser.set_defaults(handler=_build_placeholder_handler(command_name))
+
+    status_parser = subparsers.add_parser("status", help=_command_help("status"))
+    _add_workspace_arguments(status_parser)
+    status_parser.set_defaults(handler=handle_status)
 
     return parser
 
@@ -43,6 +48,10 @@ def _add_config_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", help="OpenAI-compatible model name.")
     parser.add_argument("--base-url", help="OpenAI-compatible API base URL.")
     parser.add_argument("--api-key", help="API key used for model requests.")
+    _add_workspace_arguments(parser)
+
+
+def _add_workspace_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--workspace",
         help="Workspace root directory for file and command operations.",
