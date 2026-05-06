@@ -1,6 +1,15 @@
 # Codex Progress
 
 ## Session Notes
+- Task ID: `TASK-CLI-TOOLS-001`
+- Status: `done`
+- Changed files: `src/caigode/infra/workspace.py`, `src/caigode/infra/shell.py`, `tests/test_workspace_tools.py`, `.harness/state/feature_list.json`, `.harness/state/codex-progress.md`
+- Verification command: `uv run pytest tests/test_workspace_tools.py`
+- Verification result: `passed` (exit code `0`)
+- Commit hash: `4ca6b13`
+- Next step: 继续执行下一个已满足依赖且范围清晰的 L2 任务 `TASK-CLI-AGENT-001`
+- Blockers: `(none)`
+
 - Task ID: `TASK-CLI-OPENAI-001`
 - Status: `done`
 - Changed files: `src/caigode/infra/openai_client.py`, `tests/test_openai_client.py`, `.harness/state/feature_list.json`, `.harness/state/codex-progress.md`
