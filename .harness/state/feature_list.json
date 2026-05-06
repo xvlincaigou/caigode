@@ -495,10 +495,10 @@
       "TASK-CLI-STATE-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "会话状态查询与 CLI 集成测试已实现，验证通过并提交（commit: e8474a2）。"
   },
   {
     "id": "TASK-CLI-REVIEW-001",
