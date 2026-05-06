@@ -203,10 +203,10 @@
       "TASK-CLI-CONFIG-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "OpenAI 兼容 chat/completions 客户端、错误映射与重试测试已实现，验证通过并提交（commit: f9d6c33）。"
   },
   {
     "id": "TASK-CLI-TOOLS-001",
