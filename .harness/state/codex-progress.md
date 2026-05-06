@@ -1,6 +1,15 @@
 # Codex Progress
 
 ## Session Notes
+- Task ID: `TASK-CLI-RUN-001`
+- Status: `done`
+- Changed files: `src/caigode/interface/run_handler.py`, `src/caigode/cli.py`, `tests/test_run_command.py`, `.harness/state/feature_list.json`, `.harness/state/codex-progress.md`
+- Verification command: `uv run pytest tests/test_run_command.py`
+- Verification result: `passed` (exit code `0`, `2 passed`)
+- Commit hash: `0dc2bac`
+- Next step: 继续执行下一个已满足依赖且范围清晰的 L2 任务 `TASK-CLI-REVIEW-001`
+- Blockers: `(none)`
+
 - Task ID: `TASK-CLI-STATUS-001`
 - Status: `done`
 - Changed files: `src/caigode/interface/status_handler.py`, `src/caigode/cli.py`, `tests/test_status_command.py`, `.harness/state/feature_list.json`, `.harness/state/codex-progress.md`

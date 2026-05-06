@@ -449,10 +449,10 @@
       "TASK-CLI-STATE-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "非交互 run handler、CLI 参数接线与自动化测试已实现，验证通过并提交（commit: 0dc2bac）。"
   },
   {
     "id": "TASK-CLI-STATUS-001",
