@@ -295,10 +295,10 @@
       "TASK-CLI-TOOLS-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "编码任务编排、领域对象与最小自动化测试已实现，验证通过并提交（commit: f2855a5）。"
   },
   {
     "id": "CAP-CLI-SESSION-001",
