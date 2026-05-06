@@ -402,10 +402,10 @@
       "TASK-CLI-STATE-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "交互式 REPL、CLI 接线与自动化测试已实现，验证通过并提交（commit: b6845f2）。"
   },
   {
     "id": "TASK-CLI-RUN-001",
