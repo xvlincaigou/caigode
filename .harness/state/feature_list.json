@@ -146,10 +146,10 @@
       "TASK-CLI-CONFIG-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "多子命令 CLI 入口、配置参数接线与 help 契约测试已实现，验证通过并提交（commit: 171bd21）。"
   },
   {
     "id": "CAP-CLI-ENGINE-001",
