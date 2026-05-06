@@ -521,6 +521,7 @@
       "src/caigode/infra/review_artifacts.py"
     ],
     "changed_files": [
+      "src/caigode/cli.py",
       "src/caigode/interface/review_handler.py",
       "src/caigode/infra/review_artifacts.py",
       "tests/test_review_command.py"
@@ -543,10 +544,10 @@
       "TASK-CLI-RUN-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "review 产物构造、CLI handler 与自动化测试已实现，验证通过并提交（commit: f2242c4）。"
   },
   {
     "id": "TASK-CLI-TEST-001",
