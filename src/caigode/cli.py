@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 
 from .config import ConfigError, load_config
+from .interface.run_handler import handle_run
 from .interface.status_handler import handle_status
 
 
@@ -16,10 +17,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="caigode")
     subparsers = parser.add_subparsers(dest="command")
 
-    for command_name in ("chat", "run", "review"):
+    for command_name in ("chat", "review"):
         subparser = subparsers.add_parser(command_name, help=_command_help(command_name))
         _add_config_arguments(subparser)
         subparser.set_defaults(handler=_build_placeholder_handler(command_name))
+
+    run_parser = subparsers.add_parser("run", help=_command_help("run"))
+    _add_config_arguments(run_parser)
+    run_parser.add_argument("prompt", help="Task prompt to execute.")
+    run_parser.add_argument(
+        "--context-file",
+        action="append",
+        default=[],
+        help="Workspace-relative file to read before planning. Repeatable.",
+    )
+    run_parser.add_argument(
+        "--verify",
+        action="append",
+        default=[],
+        help="Verification command to run after file writes. Repeatable.",
+    )
+    run_parser.set_defaults(handler=handle_run)
 
     status_parser = subparsers.add_parser("status", help=_command_help("status"))
     _add_workspace_arguments(status_parser)
