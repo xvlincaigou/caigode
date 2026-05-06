@@ -592,9 +592,9 @@
       "TASK-CLI-REVIEW-001"
     ],
     "session_budget": 1,
-    "status": "todo",
-    "passes": false,
-    "attempts": 0,
-    "notes": ""
+    "status": "done",
+    "passes": true,
+    "attempts": 1,
+    "notes": "最小端到端闭环测试、夹具与 README 测试说明已实现，验证通过并提交（commit: ee7858e）。"
   }
 ]

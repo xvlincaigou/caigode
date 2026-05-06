@@ -1,6 +1,15 @@
 # Codex Progress
 
 ## Session Notes
+- Task ID: `TASK-CLI-TEST-001`
+- Status: `done`
+- Changed files: `tests/test_e2e_flow.py`, `tests/fixtures/e2e_workspace/docs/context.txt`, `README.md`, `.harness/state/feature_list.json`, `.harness/state/codex-progress.md`
+- Verification command: `uv run pytest tests/test_e2e_flow.py`
+- Verification result: `passed` (exit code `0`, `1 passed`)
+- Commit hash: `ee7858e`
+- Next step: 当前 `L2 workitem` 已全部完成；如需继续，应先补充新的任务树或做收尾规划
+- Blockers: `(none)`
+
 - Task ID: `TASK-CLI-CHAT-001`
 - Status: `done`
 - Changed files: `src/caigode/interface/repl.py`, `src/caigode/cli.py`, `tests/test_repl_chat.py`, `.harness/state/feature_list.json`, `.harness/state/codex-progress.md`
