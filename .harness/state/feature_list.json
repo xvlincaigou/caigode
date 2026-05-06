@@ -1,46 +1,591 @@
 [
   {
-    "id": "CAP-001",
+    "id": "CAP-CLI-FOUNDATION-001",
     "level": "L1",
     "kind": "capability",
-    "title": "示例能力组：核心业务能力框架",
-    "description": "用于承载可执行二级任务，不直接作为提交单位。",
+    "title": "Python CLI 基础骨架与配置",
+    "description": "承载新的 Python coding agent 项目骨架、配置系统与主入口约定。",
     "status": "todo",
     "children": [
-      "TASK-001"
+      "TASK-CLI-BOOT-001",
+      "TASK-CLI-CONFIG-001",
+      "TASK-CLI-ENTRY-001"
     ]
   },
   {
-    "id": "TASK-001",
+    "id": "TASK-CLI-BOOT-001",
     "level": "L2",
     "kind": "workitem",
-    "parent_id": "CAP-001",
-    "title": "定义并落盘真实任务，不再使用示例任务 (.harness/state/feature_list.json)",
-    "objective": "用真实项目任务替换示例，确保每个二级任务都可单次会话完成并提交。",
+    "parent_id": "CAP-CLI-FOUNDATION-001",
+    "title": "搭建 Python 项目骨架到 pyproject.toml 与 src/caigode/",
+    "objective": "创建独立于 codex.sh 的 Python 包结构，为后续 CLI、领域模型和基础设施模块提供承载位置。",
     "scope_in": [
-      "重写该文件中的任务项"
+      "新增 pyproject.toml",
+      "新增 uv.lock 或 uv 初始化产物",
+      "新增 src/caigode/ 包目录与基础模块",
+      "新增 tests/ 目录骨架"
     ],
     "scope_out": [
-      "实现业务代码"
+      "实现具体 agent 逻辑",
+      "接入远程模型 API"
     ],
     "entrypoints": [
-      ".harness/state/feature_list.json"
+      "pyproject.toml",
+      "src/caigode/__init__.py"
     ],
     "changed_files": [
-      ".harness/state/feature_list.json"
+      "pyproject.toml",
+      "uv.lock",
+      "src/caigode/__init__.py",
+      "tests/__init__.py"
     ],
     "implementation_steps": [
-      "删除示例 CAP/TASK",
-      "按架构分层补齐 L1 能力组",
-      "为每个 L1 拆分 1~4 个 L2 任务并补齐验收字段"
+      "定义基于 uv 的 Python 项目元数据、依赖与入口脚本",
+      "初始化 uv 锁文件与基础执行约定",
+      "创建 src/caigode/、tests/ 的基础目录结构",
+      "补齐最小包初始化文件与占位模块",
+      "确保新项目可被 Python 解释器发现"
     ],
     "verification": [
       {
-        "command": "jq . .harness/state/feature_list.json",
-        "expect": "JSON 合法且字段完整"
+        "command": "test -f pyproject.toml && test -f uv.lock && test -f src/caigode/__init__.py && test -d tests",
+        "expect": "命令退出码为 0，说明独立 Python 项目骨架与 uv 锁文件已创建"
       }
     ],
     "depends_on": [],
+    "session_budget": 1,
+    "status": "blocked",
+    "passes": false,
+    "attempts": 1,
+    "notes": "实现与任务验证已完成，但当前沙箱禁止向 .git/ 写入，导致 git add -A 与 git commit 无法执行。待解除 git 元数据写权限后可直接提交并改为 done。"
+  },
+  {
+    "id": "TASK-CLI-CONFIG-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-FOUNDATION-001",
+    "title": "实现配置装载到 src/caigode/config.py",
+    "objective": "实现模型、URL、API Key、工作区和状态目录的统一配置入口，支持命令行参数与环境变量。",
+    "scope_in": [
+      "新增配置对象与装载逻辑",
+      "支持 OPENAI 兼容 API 的 model/base_url/api_key",
+      "定义缺参错误与默认值策略"
+    ],
+    "scope_out": [
+      "发起真实模型请求",
+      "实现 CLI 子命令"
+    ],
+    "entrypoints": [
+      "src/caigode/config.py"
+    ],
+    "changed_files": [
+      "src/caigode/config.py",
+      "tests/test_config.py"
+    ],
+    "implementation_steps": [
+      "定义配置数据结构与必要字段",
+      "实现环境变量与命令行参数合并规则",
+      "为缺失认证或 URL 的场景提供显式报错",
+      "为配置装载编写最小自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_config.py",
+        "expect": "测试通过，说明配置可从参数与环境变量正确装载"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-BOOT-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-ENTRY-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-FOUNDATION-001",
+    "title": "实现多子命令入口到 src/caigode/cli.py",
+    "objective": "建立 chat/run/status/review 四个子命令的统一 CLI 入口契约。",
+    "scope_in": [
+      "新增主 CLI 解析器",
+      "注册 chat/run/status/review 子命令",
+      "连接配置层和占位 handler"
+    ],
+    "scope_out": [
+      "实现子命令完整业务逻辑",
+      "接入实际模型调用"
+    ],
+    "entrypoints": [
+      "src/caigode/cli.py"
+    ],
+    "changed_files": [
+      "src/caigode/cli.py",
+      "tests/test_cli_help.py"
+    ],
+    "implementation_steps": [
+      "选择并接入 Python CLI 框架或标准库方案",
+      "定义顶层参数与四个子命令帮助信息",
+      "将配置装载接入命令入口",
+      "为 help 契约编写最小自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run python -m caigode.cli --help | grep -q 'chat' && uv run python -m caigode.cli --help | grep -q 'review'",
+        "expect": "帮助信息包含四个子命令，说明入口契约已建立"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-CONFIG-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "CAP-CLI-ENGINE-001",
+    "level": "L1",
+    "kind": "capability",
+    "title": "代理引擎与本地工具执行",
+    "description": "承载模型客户端、工作区工具与编码任务编排能力。",
+    "status": "todo",
+    "children": [
+      "TASK-CLI-OPENAI-001",
+      "TASK-CLI-TOOLS-001",
+      "TASK-CLI-AGENT-001"
+    ]
+  },
+  {
+    "id": "TASK-CLI-OPENAI-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-ENGINE-001",
+    "title": "实现 OpenAI 兼容客户端到 src/caigode/infra/openai_client.py",
+    "objective": "封装对 OpenAI 兼容 API 的请求、错误处理和模型参数传递。",
+    "scope_in": [
+      "新增模型客户端适配器",
+      "支持自定义 model/base_url/api_key",
+      "处理超时、限流和响应解析"
+    ],
+    "scope_out": [
+      "实现 REPL 会话流程",
+      "实现本地工具调用"
+    ],
+    "entrypoints": [
+      "src/caigode/infra/openai_client.py"
+    ],
+    "changed_files": [
+      "src/caigode/infra/openai_client.py",
+      "tests/test_openai_client.py"
+    ],
+    "implementation_steps": [
+      "选择 HTTP 客户端并定义请求接口",
+      "实现 OpenAI 兼容 chat/completions 或 responses 适配层",
+      "补齐错误映射、超时与重试策略",
+      "使用 mock 响应编写自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_openai_client.py",
+        "expect": "测试通过，说明客户端可构造请求并正确处理模拟响应"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-CONFIG-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-TOOLS-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-ENGINE-001",
+    "title": "实现工作区工具到 src/caigode/infra/workspace.py 与 src/caigode/infra/shell.py",
+    "objective": "提供受工作区约束的文件读写与 shell 执行能力，作为 agent 的本地工具基础设施。",
+    "scope_in": [
+      "新增文件读写工具",
+      "新增受限 shell 执行工具",
+      "定义工具结果对象与错误语义"
+    ],
+    "scope_out": [
+      "实现模型推理逻辑",
+      "实现 review 产物输出"
+    ],
+    "entrypoints": [
+      "src/caigode/infra/workspace.py",
+      "src/caigode/infra/shell.py"
+    ],
+    "changed_files": [
+      "src/caigode/infra/workspace.py",
+      "src/caigode/infra/shell.py",
+      "tests/test_workspace_tools.py"
+    ],
+    "implementation_steps": [
+      "定义工作区根目录和允许访问范围",
+      "实现文件读取、写入和路径校验逻辑",
+      "实现 shell 命令执行与退出码收集",
+      "为工具行为编写最小自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_workspace_tools.py",
+        "expect": "测试通过，说明文件与 shell 工具遵守工作区边界"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-BOOT-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-AGENT-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-ENGINE-001",
+    "title": "实现编码任务编排到 src/caigode/application/agent_service.py",
+    "objective": "将用户输入、模型响应、本地工具调用和验证动作编排为可复用的 agent 服务。",
+    "scope_in": [
+      "定义 agent 服务输入输出",
+      "串联模型客户端与本地工具",
+      "返回结构化执行结果"
+    ],
+    "scope_out": [
+      "实现 REPL 交互界面",
+      "实现状态持久化"
+    ],
+    "entrypoints": [
+      "src/caigode/application/agent_service.py"
+    ],
+    "changed_files": [
+      "src/caigode/application/agent_service.py",
+      "src/caigode/domain/task.py",
+      "tests/test_agent_service.py"
+    ],
+    "implementation_steps": [
+      "定义任务意图、工具动作和执行结果领域对象",
+      "实现一次 agent 回合的编排流程",
+      "注入模型客户端和本地工具依赖",
+      "为最小编排闭环编写自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_agent_service.py",
+        "expect": "测试通过，说明模型与工具调用可被统一编排"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-OPENAI-001",
+      "TASK-CLI-TOOLS-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "CAP-CLI-SESSION-001",
+    "level": "L1",
+    "kind": "capability",
+    "title": "会话状态与交付产物",
+    "description": "承载 REPL 会话、运行状态、状态查询与交付摘要输出。",
+    "status": "todo",
+    "children": [
+      "TASK-CLI-STATE-001",
+      "TASK-CLI-CHAT-001",
+      "TASK-CLI-RUN-001",
+      "TASK-CLI-STATUS-001",
+      "TASK-CLI-REVIEW-001",
+      "TASK-CLI-TEST-001"
+    ]
+  },
+  {
+    "id": "TASK-CLI-STATE-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-SESSION-001",
+    "title": "实现文件状态存储到 src/caigode/infra/state_store.py",
+    "objective": "用文件系统持久化会话、日志索引、验证结果和交付摘要索引。",
+    "scope_in": [
+      "新增状态目录约定",
+      "实现会话读写与原子替换",
+      "定义状态文件序列化格式"
+    ],
+    "scope_out": [
+      "实现 REPL UI",
+      "实现模型客户端"
+    ],
+    "entrypoints": [
+      "src/caigode/infra/state_store.py"
+    ],
+    "changed_files": [
+      "src/caigode/infra/state_store.py",
+      "tests/test_state_store.py"
+    ],
+    "implementation_steps": [
+      "定义 .caigode/ 目录结构与文件命名规则",
+      "实现会话状态与产物索引的读写接口",
+      "加入临时文件写入与原子替换策略",
+      "编写状态持久化自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_state_store.py",
+        "expect": "测试通过，说明状态文件可稳定读写并保留目录结构"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-BOOT-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-CHAT-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-SESSION-001",
+    "title": "实现交互式会话到 src/caigode/interface/repl.py",
+    "objective": "提供聊天式多轮 REPL，会话中可触发 agent 回合并保存状态。",
+    "scope_in": [
+      "新增 REPL 循环",
+      "接入 agent 服务与状态存储",
+      "输出用户可读的回合结果"
+    ],
+    "scope_out": [
+      "实现 review 产物生成",
+      "实现完整非交互 run 流程"
+    ],
+    "entrypoints": [
+      "src/caigode/interface/repl.py"
+    ],
+    "changed_files": [
+      "src/caigode/interface/repl.py",
+      "src/caigode/cli.py",
+      "tests/test_repl_chat.py"
+    ],
+    "implementation_steps": [
+      "定义会话启动、输入读取和退出协议",
+      "将用户输入交给 agent 服务执行",
+      "在每轮后持久化状态并输出摘要",
+      "使用 mock 代理编写 REPL 自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_repl_chat.py",
+        "expect": "测试通过，说明交互式会话可驱动至少一轮 agent 执行"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-ENTRY-001",
+      "TASK-CLI-AGENT-001",
+      "TASK-CLI-STATE-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-RUN-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-SESSION-001",
+    "title": "实现非交互执行到 src/caigode/interface/run_handler.py",
+    "objective": "提供 `run` 子命令，使代理可在无 REPL 的情况下消费输入任务并产出状态。",
+    "scope_in": [
+      "新增 run handler",
+      "接入 agent 服务与状态存储",
+      "定义标准输出与退出码语义"
+    ],
+    "scope_out": [
+      "实现 status 查询",
+      "实现 review 产物输出"
+    ],
+    "entrypoints": [
+      "src/caigode/interface/run_handler.py"
+    ],
+    "changed_files": [
+      "src/caigode/interface/run_handler.py",
+      "src/caigode/cli.py",
+      "tests/test_run_command.py"
+    ],
+    "implementation_steps": [
+      "定义 run 子命令输入源与参数",
+      "调用 agent 服务完成一次任务执行",
+      "持久化状态并返回命令级结果",
+      "为非交互路径编写自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_run_command.py",
+        "expect": "测试通过，说明 run 子命令可完成一次非交互执行"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-ENTRY-001",
+      "TASK-CLI-AGENT-001",
+      "TASK-CLI-STATE-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-STATUS-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-SESSION-001",
+    "title": "实现会话状态查询到 src/caigode/interface/status_handler.py",
+    "objective": "让用户可通过 status 子命令读取最近会话、验证结果和错误信息。",
+    "scope_in": [
+      "新增 status handler",
+      "读取状态存储中的会话摘要",
+      "定义终端展示格式"
+    ],
+    "scope_out": [
+      "实现 review 产物生成",
+      "实现模型请求"
+    ],
+    "entrypoints": [
+      "src/caigode/interface/status_handler.py"
+    ],
+    "changed_files": [
+      "src/caigode/interface/status_handler.py",
+      "src/caigode/cli.py",
+      "tests/test_status_command.py"
+    ],
+    "implementation_steps": [
+      "定义 status 输出字段和排序规则",
+      "实现从状态文件读取最近会话与验证结果",
+      "接入 CLI 子命令并输出可读摘要",
+      "为状态查询编写自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_status_command.py",
+        "expect": "测试通过，说明 status 子命令可读取并展示会话状态"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-ENTRY-001",
+      "TASK-CLI-STATE-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-REVIEW-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-SESSION-001",
+    "title": "实现交付摘要输出到 src/caigode/infra/review_artifacts.py 与 src/caigode/interface/review_handler.py",
+    "objective": "让代理能基于会话状态与工作区信息生成本地交付材料，例如 review 摘要和提交说明草稿。",
+    "scope_in": [
+      "新增 review 产物构造器",
+      "新增 review 子命令 handler",
+      "将产物写入 .caigode/artifacts/"
+    ],
+    "scope_out": [
+      "实现远程 PR 创建",
+      "实现代码托管平台发布"
+    ],
+    "entrypoints": [
+      "src/caigode/interface/review_handler.py",
+      "src/caigode/infra/review_artifacts.py"
+    ],
+    "changed_files": [
+      "src/caigode/interface/review_handler.py",
+      "src/caigode/infra/review_artifacts.py",
+      "tests/test_review_command.py"
+    ],
+    "implementation_steps": [
+      "定义 review 产物的数据结构与模板",
+      "从状态存储和工作区摘要中组装交付内容",
+      "实现 review 子命令与产物文件写入",
+      "为交付摘要输出编写自动化测试"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_review_command.py",
+        "expect": "测试通过，说明 review 子命令可生成本地交付材料"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-ENTRY-001",
+      "TASK-CLI-STATE-001",
+      "TASK-CLI-RUN-001"
+    ],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  },
+  {
+    "id": "TASK-CLI-TEST-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-CLI-SESSION-001",
+    "title": "补充最小端到端测试到 tests/test_e2e_flow.py",
+    "objective": "验证最小工程交付闭环：模型响应、文件改动、本地验证、状态持久化和 review 产物生成。",
+    "scope_in": [
+      "新增端到端测试夹具",
+      "串联 run/status/review 关键路径",
+      "校验 .caigode/ 下状态与产物文件"
+    ],
+    "scope_out": [
+      "真实调用远程模型",
+      "接入远程代码托管平台"
+    ],
+    "entrypoints": [
+      "tests/test_e2e_flow.py"
+    ],
+    "changed_files": [
+      "tests/test_e2e_flow.py",
+      "tests/fixtures/",
+      "README.md"
+    ],
+    "implementation_steps": [
+      "构建可重复执行的测试夹具工作区",
+      "使用 mock 模型响应驱动最小任务闭环",
+      "断言文件改动、验证结果和 review 产物已生成",
+      "更新 README 中的本地测试说明"
+    ],
+    "verification": [
+      {
+        "command": "uv run pytest tests/test_e2e_flow.py",
+        "expect": "测试通过，说明最小工程交付闭环在本地可复现"
+      }
+    ],
+    "depends_on": [
+      "TASK-CLI-CHAT-001",
+      "TASK-CLI-RUN-001",
+      "TASK-CLI-STATUS-001",
+      "TASK-CLI-REVIEW-001"
+    ],
     "session_budget": 1,
     "status": "todo",
     "passes": false,
