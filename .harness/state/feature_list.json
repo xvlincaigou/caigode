@@ -1,0 +1,50 @@
+[
+  {
+    "id": "CAP-001",
+    "level": "L1",
+    "kind": "capability",
+    "title": "示例能力组：核心业务能力框架",
+    "description": "用于承载可执行二级任务，不直接作为提交单位。",
+    "status": "todo",
+    "children": [
+      "TASK-001"
+    ]
+  },
+  {
+    "id": "TASK-001",
+    "level": "L2",
+    "kind": "workitem",
+    "parent_id": "CAP-001",
+    "title": "定义并落盘真实任务，不再使用示例任务 (.harness/state/feature_list.json)",
+    "objective": "用真实项目任务替换示例，确保每个二级任务都可单次会话完成并提交。",
+    "scope_in": [
+      "重写该文件中的任务项"
+    ],
+    "scope_out": [
+      "实现业务代码"
+    ],
+    "entrypoints": [
+      ".harness/state/feature_list.json"
+    ],
+    "changed_files": [
+      ".harness/state/feature_list.json"
+    ],
+    "implementation_steps": [
+      "删除示例 CAP/TASK",
+      "按架构分层补齐 L1 能力组",
+      "为每个 L1 拆分 1~4 个 L2 任务并补齐验收字段"
+    ],
+    "verification": [
+      {
+        "command": "jq . .harness/state/feature_list.json",
+        "expect": "JSON 合法且字段完整"
+      }
+    ],
+    "depends_on": [],
+    "session_budget": 1,
+    "status": "todo",
+    "passes": false,
+    "attempts": 0,
+    "notes": ""
+  }
+]

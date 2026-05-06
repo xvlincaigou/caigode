@@ -1,0 +1,12 @@
+# Codex local runtime
+.codex-home/
+
+# Harness runtime artifacts
+.harness/logs/*.log
+.harness/state/discussion.lock
+.harness/state/last_thread_id.txt
+.harness/state/harness-protected.snapshot
+.harness/state/harness-protect-alert.md
+
+# macOS
+.DS_Store
