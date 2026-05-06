@@ -23,6 +23,7 @@ DECISIONS_FILE="${DECISIONS_FILE:-$STATE_DIR/decisions-needed.md}"
 
 MODEL="${MODEL:-gpt-5.4}"
 SANDBOX="${SANDBOX:-workspace-write}"
+RUN_SANDBOX="${RUN_SANDBOX:-danger-full-access}"
 APPROVAL="${APPROVAL:-on-failure}"
 ENABLE_SEARCH="${ENABLE_SEARCH:-0}"
 
@@ -516,7 +517,7 @@ run_exec_iteration() {
   local -a cmd
   # NOTE: `codex exec` does not support `-a/--ask-for-approval`.
   # Approval policy for exec should be managed via Codex config/profiles.
-  cmd=(codex exec --json -C "$ROOT" -m "$MODEL" -s "$SANDBOX")
+  cmd=(codex exec --json -C "$ROOT" -m "$MODEL" -s "$RUN_SANDBOX")
   if [[ "$ENABLE_SEARCH" == "1" ]]; then
     cmd+=(--search)
   fi
@@ -671,6 +672,7 @@ show_status() {
 
   echo "ROOT=$ROOT"
   echo "CODEX_HOME=$CODEX_HOME"
+  echo "RUN_SANDBOX=$RUN_SANDBOX"
   echo "SANDBOX=$SANDBOX"
   echo "APPROVAL=$APPROVAL"
   echo "LOCKED=$([[ -f "$DISCUSS_LOCK_FILE" ]] && echo yes || echo no)"

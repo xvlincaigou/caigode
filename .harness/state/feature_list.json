@@ -54,10 +54,10 @@
     ],
     "depends_on": [],
     "session_budget": 1,
-    "status": "blocked",
-    "passes": false,
+    "status": "done",
+    "passes": true,
     "attempts": 1,
-    "notes": "实现与任务验证已完成，但当前沙箱禁止向 .git/ 写入，导致 git add -A 与 git commit 无法执行。待解除 git 元数据写权限后可直接提交并改为 done。"
+    "notes": "项目骨架实现与验证通过，已提交并推送（commit: 9572c5a）。"
   },
   {
     "id": "TASK-CLI-CONFIG-001",

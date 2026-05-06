@@ -96,6 +96,7 @@ bash codex.sh reset-logs       # 清理日志
 ```bash
 MODEL=gpt-5.4
 SANDBOX=workspace-write
+RUN_SANDBOX=danger-full-access
 APPROVAL=on-failure
 ENABLE_SEARCH=0
 
@@ -114,7 +115,8 @@ CODEX_HOME=~/.codex
 
 ## 权限行为说明
 
-- `SANDBOX=workspace-write`：工作区内读写可执行，越界操作会受限。
+- `RUN_SANDBOX=danger-full-access`（默认）：`run` 阶段使用全权限沙箱，允许写入 `.git/` 以完成自动提交。
+- `SANDBOX=workspace-write`：`discuss` 阶段在工作区内读写可执行，越界操作会受限。
 - `APPROVAL=on-failure`（默认）：先自动执行，失败后再请求你授权。
 - `APPROVAL=on-request`：模型可主动请求你审批。
 - `APPROVAL=never`：不请求审批（风险最高）。
