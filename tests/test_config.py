@@ -25,6 +25,7 @@ def test_load_config_prefers_explicit_arguments(tmp_path: Path) -> None:
         model="gpt-5",
         base_url="https://cli.example/v1",
         api_key="cli-key",
+        timeout_seconds=120.0,
         workspace=(tmp_path / "repo").resolve(),
         state_dir=(tmp_path / "repo" / "runtime-state").resolve(),
     )
@@ -45,6 +46,7 @@ def test_load_config_reads_environment_and_applies_defaults(tmp_path: Path) -> N
     assert config.model == "gpt-4.1-mini"
     assert config.base_url == "https://api.example/v1"
     assert config.api_key == "secret"
+    assert config.timeout_seconds == 120.0
     assert config.workspace == workspace.resolve()
     assert config.state_dir == (workspace / ".caigode").resolve()
 
@@ -89,6 +91,7 @@ def test_load_config_reads_process_environment_by_default(
     assert config.model == "env-model"
     assert config.base_url == "https://env.example/v1"
     assert config.api_key == "env-key"
+    assert config.timeout_seconds == 120.0
 
 
 def test_load_config_falls_back_to_dotenv_when_env_missing(tmp_path: Path) -> None:
@@ -108,6 +111,7 @@ def test_load_config_falls_back_to_dotenv_when_env_missing(tmp_path: Path) -> No
     assert config.model == "dotenv-model"
     assert config.base_url == "https://dotenv.example/v1"
     assert config.api_key == "dotenv-key"
+    assert config.timeout_seconds == 120.0
 
 
 def test_load_config_prefers_environment_over_dotenv(
@@ -132,3 +136,40 @@ def test_load_config_prefers_environment_over_dotenv(
     assert config.model == "env-model"
     assert config.base_url == "https://env.example/v1"
     assert config.api_key == "env-key"
+    assert config.timeout_seconds == 120.0
+
+
+def test_load_config_reads_timeout_from_environment(tmp_path: Path) -> None:
+    config = load_config(
+        model="gpt-4.1-mini",
+        base_url="https://api.example/v1",
+        api_key="secret",
+        environ={"OPENAI_TIMEOUT_SECONDS": "45"},
+        cwd=tmp_path,
+    )
+
+    assert config.timeout_seconds == 45.0
+
+
+def test_load_config_timeout_argument_overrides_environment(tmp_path: Path) -> None:
+    config = load_config(
+        model="gpt-4.1-mini",
+        base_url="https://api.example/v1",
+        api_key="secret",
+        timeout_seconds=75.0,
+        environ={"OPENAI_TIMEOUT_SECONDS": "45"},
+        cwd=tmp_path,
+    )
+
+    assert config.timeout_seconds == 75.0
+
+
+def test_load_config_rejects_invalid_timeout_value(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError):
+        load_config(
+            model="gpt-4.1-mini",
+            base_url="https://api.example/v1",
+            api_key="secret",
+            environ={"OPENAI_TIMEOUT_SECONDS": "0"},
+            cwd=tmp_path,
+        )

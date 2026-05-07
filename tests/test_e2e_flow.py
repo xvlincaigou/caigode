@@ -80,7 +80,7 @@ def test_e2e_run_status_review_flow(tmp_path: Path, monkeypatch, capsys) -> None
     assert len(sessions) == 1
 
     session_id = sessions[0].session_id
-    session_path = state_dir / "sessions" / f"{session_id}.json"
+    session_path = state_dir / "sessions" / f"{session_id}.jsonl"
     log_path = state_dir / "logs" / f"{session_id}.log"
     output_path = tmp_path / "build" / "output.txt"
 

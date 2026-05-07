@@ -37,6 +37,7 @@ def handle_review(args: argparse.Namespace) -> int:
             result=session.result,
             error=session.error,
             artifact_paths=updated_paths,
+            messages=session.messages,
         )
     )
     store.append_log(session.session_id, "review artifacts generated")

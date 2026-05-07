@@ -111,6 +111,16 @@ class AgentService:
             verification_results=tuple(verification_results),
         )
 
+    def export_messages(self) -> tuple[dict[str, str], ...]:
+        return tuple(dict(item) for item in self._messages)
+
+    def import_messages(self, messages: tuple[dict[str, str], ...]) -> None:
+        self._messages = [
+            {"role": str(item.get("role", "")), "content": str(item.get("content", ""))}
+            for item in messages
+            if isinstance(item, dict)
+        ]
+
     def _run_agent_loop(
         self,
         runtime: ToolRuntime,
@@ -194,6 +204,7 @@ class AgentService:
             "task": intent.prompt,
             "runtime_context": runtime_context,
             "context_files": context_payloads,
+            "recent_messages": _recent_messages(self._messages),
             "available_tools": [
                 {
                     "name": "list_dir",
@@ -203,7 +214,16 @@ class AgentService:
                         "max_entries": "int (optional, default 200, max 1000)",
                     },
                 },
-                {"name": "read_file", "args": {"path": "relative/or/absolute/path"}},
+                {
+                    "name": "read_file",
+                    "args": {
+                        "path": "relative/or/absolute/path",
+                        "offset": "int >= 0 (optional)",
+                        "limit": "int >= 0 (optional)",
+                        "start_line": "int >= 1 (optional)",
+                        "end_line": "int >= start_line (optional)",
+                    },
+                },
                 {
                     "name": "write_file",
                     "args": {
@@ -271,6 +291,8 @@ class AgentService:
 def _build_system_prompt(runtime_context: dict[str, Any]) -> str:
     return (
         "You are caigode, a coding agent running in a local terminal workspace.\n"
+        "This chat session is stateful: you can and must use prior conversation messages.\n"
+        "Never claim you are stateless or unable to access earlier turns in this same session.\n"
         "Use runtime_context as ground truth for where you are running.\n"
         "If the user asks to edit files in 'this folder', treat workspace_root/cwd as that folder.\n"
         "To inspect files, call tools (list_dir/read_file) instead of asking for paths first.\n"
@@ -433,3 +455,21 @@ def _fallback_summary(tool_results: list[dict[str, Any]]) -> str:
         f"Executed {len(tool_results)} action(s): "
         f"{success_count} succeeded, {failure_count} failed."
     )
+
+
+def _recent_messages(
+    messages: list[dict[str, str]],
+    *,
+    limit: int = 8,
+    content_chars: int = 500,
+) -> list[dict[str, str]]:
+    selected = [item for item in messages if item.get("role") in {"user", "assistant"}]
+    selected = selected[-limit:]
+    output: list[dict[str, str]] = []
+    for item in selected:
+        role = str(item.get("role", ""))
+        content = str(item.get("content", ""))
+        if len(content) > content_chars:
+            content = content[:content_chars] + "\n...<truncated>..."
+        output.append({"role": role, "content": content})
+    return output

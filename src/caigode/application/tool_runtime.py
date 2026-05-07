@@ -70,23 +70,46 @@ class ToolRuntime:
     ) -> dict[str, Any]:
         if tool_call.tool == "read_file":
             path = _require_str_arg(tool_call, "path")
+            offset = _optional_int_arg(tool_call, "offset")
+            limit = _optional_int_arg(tool_call, "limit")
+            start_line = _optional_int_arg(tool_call, "start_line")
+            end_line = _optional_int_arg(tool_call, "end_line")
             try:
                 read_result = self.workspace.read_text(path)
             except Exception as exc:
+                return {"tool": "read_file", "ok": False, "path": path, "error": str(exc)}
+            try:
+                selected = _slice_text(
+                    read_result.content,
+                    offset=offset,
+                    limit=limit,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
+            except ValueError as exc:
                 return {"tool": "read_file", "ok": False, "path": path, "error": str(exc)}
             tool_actions.append(
                 ToolAction(
                     kind="read",
                     target=str(read_result.path),
-                    detail=f"{len(read_result.content)} chars",
+                    detail=f"{len(selected)} chars",
                 )
             )
-            return {
+            output = {
                 "tool": "read_file",
                 "ok": True,
                 "path": str(read_result.path),
-                "content": _truncate(read_result.content),
+                "content": _truncate(selected),
             }
+            if offset is not None:
+                output["offset"] = offset
+            if limit is not None:
+                output["limit"] = limit
+            if start_line is not None:
+                output["start_line"] = start_line
+            if end_line is not None:
+                output["end_line"] = end_line
+            return output
 
         if tool_call.tool == "write_file":
             path = _require_str_arg(tool_call, "path")
@@ -267,3 +290,37 @@ def _truncate(text: str) -> str:
     if len(text) <= TOOL_OUTPUT_PREVIEW_CHARS:
         return text
     return text[:TOOL_OUTPUT_PREVIEW_CHARS] + "\n...<truncated>..."
+
+
+def _slice_text(
+    content: str,
+    *,
+    offset: int | None,
+    limit: int | None,
+    start_line: int | None,
+    end_line: int | None,
+) -> str:
+    if offset is not None and offset < 0:
+        raise ValueError("read_file.offset must be >= 0")
+    if limit is not None and limit < 0:
+        raise ValueError("read_file.limit must be >= 0")
+    if start_line is not None and start_line < 1:
+        raise ValueError("read_file.start_line must be >= 1")
+    if end_line is not None and end_line < 1:
+        raise ValueError("read_file.end_line must be >= 1")
+    if start_line is not None and end_line is not None and start_line > end_line:
+        raise ValueError("read_file.start_line must be <= end_line")
+
+    selected = content
+    if start_line is not None or end_line is not None:
+        lines = content.splitlines(keepends=True)
+        start_idx = (start_line - 1) if start_line is not None else 0
+        end_idx = end_line if end_line is not None else len(lines)
+        selected = "".join(lines[start_idx:end_idx])
+
+    if offset is not None or limit is not None:
+        start_idx = offset or 0
+        end_idx = None if limit is None else start_idx + limit
+        selected = selected[start_idx:end_idx]
+
+    return selected

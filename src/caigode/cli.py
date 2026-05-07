@@ -87,6 +87,11 @@ def _add_config_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", help="OpenAI-compatible model name.")
     parser.add_argument("--base-url", help="OpenAI-compatible API base URL.")
     parser.add_argument("--api-key", help="API key used for model requests.")
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        help="Timeout for each model request in seconds (default: 120).",
+    )
     _add_workspace_arguments(parser)
 
 

@@ -95,7 +95,7 @@ def test_create_chat_completion_posts_expected_payload() -> None:
                 "temperature": 0.2,
                 "max_tokens": 128,
             },
-            "timeout": 30.0,
+            "timeout": 120.0,
         }
     ]
 

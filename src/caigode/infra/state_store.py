@@ -40,6 +40,7 @@ class SessionState:
     result: AgentTurnResult | None = None
     error: str | None = None
     artifact_paths: tuple[str, ...] = field(default_factory=tuple)
+    messages: tuple[dict[str, str], ...] = field(default_factory=tuple)
 
     @property
     def success(self) -> bool | None:
@@ -62,23 +63,29 @@ class StateStore:
     def save_session(self, session: SessionState) -> Path:
         """Persist one session snapshot."""
 
-        path = self.sessions_dir / f"{session.session_id}.json"
+        path = self.sessions_dir / f"{session.session_id}.jsonl"
         payload = {
             "session_id": session.session_id,
             "mode": session.mode,
             "updated_at": session.updated_at,
             "error": session.error,
             "artifact_paths": list(session.artifact_paths),
+            "messages": list(session.messages),
             "result": _serialize_result(session.result),
         }
-        self._write_json(path, payload)
+        self._append_jsonl(path, payload)
         return path
 
     def load_session(self, session_id: str) -> SessionState:
         """Load one persisted session by id."""
 
-        path = self.sessions_dir / f"{session_id}.json"
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        jsonl_path = self.sessions_dir / f"{session_id}.jsonl"
+        if jsonl_path.exists():
+            payload = self._read_last_jsonl(jsonl_path)
+            return _deserialize_session(payload)
+
+        legacy_path = self.sessions_dir / f"{session_id}.json"
+        payload = json.loads(legacy_path.read_text(encoding="utf-8"))
         return _deserialize_session(payload)
 
     def list_sessions(self) -> tuple[SessionState, ...]:
@@ -87,10 +94,21 @@ class StateStore:
         if not self.sessions_dir.exists():
             return ()
 
-        sessions = [
-            _deserialize_session(json.loads(path.read_text(encoding="utf-8")))
-            for path in self.sessions_dir.glob("*.json")
-        ]
+        sessions_by_id: dict[str, SessionState] = {}
+
+        for path in self.sessions_dir.glob("*.jsonl"):
+            try:
+                session = _deserialize_session(self._read_last_jsonl(path))
+            except ValueError:
+                continue
+            sessions_by_id[session.session_id] = session
+
+        for path in self.sessions_dir.glob("*.json"):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            session = _deserialize_session(payload)
+            sessions_by_id.setdefault(session.session_id, session)
+
+        sessions = list(sessions_by_id.values())
         sessions.sort(key=lambda session: session.updated_at, reverse=True)
         return tuple(sessions)
 
@@ -171,6 +189,25 @@ class StateStore:
         )
         temp_path.replace(path)
 
+    def _append_jsonl(self, path: Path, payload: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False))
+            handle.write("\n")
+
+    def _read_last_jsonl(self, path: Path) -> dict[str, object]:
+        lines = [
+            line.strip()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        if not lines:
+            raise ValueError(f"Session file {path} is empty")
+        payload = json.loads(lines[-1])
+        if not isinstance(payload, dict):
+            raise ValueError(f"Session file {path} has malformed payload")
+        return payload
+
 
 def _serialize_result(result: AgentTurnResult | None) -> dict[str, object] | None:
     if result is None:
@@ -206,6 +243,11 @@ def _deserialize_session(payload: dict[str, object]) -> SessionState:
         updated_at=str(payload["updated_at"]),
         error=None if payload.get("error") is None else str(payload["error"]),
         artifact_paths=tuple(str(item) for item in payload.get("artifact_paths", [])),
+        messages=tuple(
+            {"role": str(item.get("role", "")), "content": str(item.get("content", ""))}
+            for item in payload.get("messages", [])
+            if isinstance(item, dict)
+        ),
         result=result,
     )
 

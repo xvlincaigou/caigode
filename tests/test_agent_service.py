@@ -194,3 +194,39 @@ def test_agent_service_appends_messages_across_turns(tmp_path: Path) -> None:
     assert "first question" in second_call_payload
     assert "first turn" in second_call_payload
     assert "second question" in second_call_payload
+
+
+def test_agent_service_read_file_supports_line_window(tmp_path: Path) -> None:
+    workspace = Workspace(tmp_path)
+    shell_runner = ShellRunner(tmp_path)
+    workspace.write_text("sample.txt", "line1\nline2\nline3\nline4\n")
+    model_client = DummyModelClient(
+        [
+            json.dumps(
+                {
+                    "tool_calls": [
+                        {
+                            "tool": "read_file",
+                            "args": {"path": "sample.txt", "start_line": 2, "end_line": 3},
+                        }
+                    ],
+                    "done": False,
+                }
+            ),
+            '{"summary":"done","done":true}',
+        ]
+    )
+    service = AgentService(
+        model_client=model_client,
+        workspace=workspace,
+        shell_runner=shell_runner,
+    )
+
+    result = service.run_turn(TaskIntent(prompt="read lines"))
+
+    assert result.summary == "done"
+    assert len(model_client.messages) == 2
+    tool_result_payload = model_client.messages[1][-1]["content"]
+    assert "line2" in tool_result_payload
+    assert "line3" in tool_result_payload
+    assert "line1" not in tool_result_payload

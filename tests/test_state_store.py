@@ -40,7 +40,7 @@ def test_state_store_persists_and_lists_sessions(tmp_path: Path) -> None:
     loaded = store.load_session("session-old")
     sessions = store.list_sessions()
 
-    assert session_path == (tmp_path / ".caigode" / "sessions" / "session-old.json").resolve()
+    assert session_path == (tmp_path / ".caigode" / "sessions" / "session-old.jsonl").resolve()
     assert loaded.result is not None
     assert loaded.result.summary == "Old summary"
     assert loaded.result.tool_actions[0].kind == "read"

@@ -23,6 +23,7 @@ def handle_run(args: argparse.Namespace) -> int:
         model=args.model,
         base_url=args.base_url,
         api_key=args.api_key,
+        timeout_seconds=args.timeout_seconds,
         workspace=args.workspace,
         state_dir=args.state_dir,
     )
@@ -33,6 +34,7 @@ def handle_run(args: argparse.Namespace) -> int:
             base_url=config.base_url,
             api_key=config.api_key,
             model=config.model,
+            timeout_seconds=config.timeout_seconds,
         ),
         workspace=Workspace(config.workspace),
         shell_runner=ShellRunner(config.workspace),
@@ -47,7 +49,12 @@ def handle_run(args: argparse.Namespace) -> int:
             )
         )
     except Exception as exc:
-        session_path = _save_failed_session(store, session_id=session_id, error=str(exc))
+        session_path = _save_failed_session(
+            store,
+            session_id=session_id,
+            error=str(exc),
+            messages=service.export_messages(),
+        )
         print(_format_failed_output(session_id, str(exc), session_path))
         return 1
 
@@ -56,6 +63,7 @@ def handle_run(args: argparse.Namespace) -> int:
         mode="run",
         updated_at=_timestamp(),
         result=result,
+        messages=service.export_messages(),
     )
     session_path = store.save_session(session)
     store.append_log(
@@ -74,12 +82,19 @@ def handle_run(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
-def _save_failed_session(store: StateStore, *, session_id: str, error: str) -> Path:
+def _save_failed_session(
+    store: StateStore,
+    *,
+    session_id: str,
+    error: str,
+    messages: tuple[dict[str, str], ...] = (),
+) -> Path:
     session = SessionState(
         session_id=session_id,
         mode="run",
         updated_at=_timestamp(),
         error=error,
+        messages=messages,
     )
     session_path = store.save_session(session)
     store.append_log(session_id, f"run failed: {error}")

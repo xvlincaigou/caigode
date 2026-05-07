@@ -10,7 +10,7 @@ from typing import Any
 from urllib import error, request
 
 
-DEFAULT_TIMEOUT_SECONDS = 30.0
+DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_RETRIES = 2
 
 
