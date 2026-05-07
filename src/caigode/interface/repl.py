@@ -93,7 +93,7 @@ def run_repl(
         except Exception as exc:
             session_path = _save_failed_session(store, session_id=session_id, error=str(exc))
             print(_format_failed_output(session_id, str(exc), session_path))
-            return 1
+            continue
 
         session = SessionState(
             session_id=session_id,

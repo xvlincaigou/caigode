@@ -62,13 +62,14 @@ def test_load_config_resolves_relative_workspace_from_cwd(tmp_path: Path) -> Non
     assert config.state_dir == (tmp_path / "relative-workspace" / ".caigode").resolve()
 
 
-def test_load_config_rejects_missing_required_values() -> None:
+def test_load_config_rejects_missing_required_values(tmp_path: Path) -> None:
     with pytest.raises(ConfigError) as exc_info:
         load_config(
             environ={
                 "OPENAI_MODEL": " ",
                 "OPENAI_BASE_URL": "https://api.example/v1",
-            }
+            },
+            cwd=tmp_path,
         )
 
     message = str(exc_info.value)

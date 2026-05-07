@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,13 +19,18 @@ class DummyModelResponse:
 
 
 class DummyModelClient:
-    def __init__(self, response_text: str) -> None:
-        self.response_text = response_text
+    def __init__(self, response_text: str | list[str]) -> None:
+        if isinstance(response_text, str):
+            self.responses = [response_text]
+        else:
+            self.responses = list(response_text)
         self.messages: list[list[dict[str, str]]] = []
 
     def create_chat_completion(self, *, messages: list[dict[str, str]]) -> DummyModelResponse:
-        self.messages.append(messages)
-        return DummyModelResponse(content=self.response_text)
+        self.messages.append([dict(item) for item in messages])
+        if not self.responses:
+            raise AssertionError("no more dummy responses configured")
+        return DummyModelResponse(content=self.responses.pop(0))
 
 
 def test_agent_service_runs_model_plan_and_verification(tmp_path: Path) -> None:
@@ -90,3 +96,101 @@ def test_agent_service_rejects_invalid_model_plan(tmp_path: Path) -> None:
 
     with pytest.raises(AgentPlanError):
         service.run_turn(TaskIntent(prompt="do work"))
+
+
+def test_agent_service_supports_multi_step_tool_calls(tmp_path: Path) -> None:
+    workspace = Workspace(tmp_path)
+    shell_runner = ShellRunner(tmp_path)
+    workspace.write_text("README.md", "hello\n")
+    model_client = DummyModelClient(
+        [
+            """
+            {
+              "tool_calls": [
+                {"tool": "read_file", "args": {"path": "README.md"}}
+              ],
+              "done": false
+            }
+            """,
+            """
+            {
+              "summary": "Updated README in this workspace.",
+              "tool_calls": [
+                {
+                  "tool": "write_file",
+                  "args": {"path": "README.md", "content": "hello\\nworld\\n"}
+                }
+              ],
+              "done": true
+            }
+            """,
+        ]
+    )
+    service = AgentService(
+        model_client=model_client,
+        workspace=workspace,
+        shell_runner=shell_runner,
+    )
+
+    result = service.run_turn(TaskIntent(prompt="Update README"))
+
+    assert result.summary == "Updated README in this workspace."
+    assert (tmp_path / "README.md").read_text(encoding="utf-8") == "hello\nworld\n"
+    assert len(model_client.messages) == 2
+    assert '"tool": "read_file"' in model_client.messages[1][-1]["content"]
+    assert [action.kind for action in result.tool_actions] == ["read", "write"]
+
+
+def test_agent_service_run_command_tool_records_output(tmp_path: Path) -> None:
+    workspace = Workspace(tmp_path)
+    shell_runner = ShellRunner(tmp_path)
+    command = f"{sys.executable} -c \"print('ok')\""
+    model_client = DummyModelClient(
+        json.dumps(
+            {
+                "summary": "Ran verification command.",
+                "tool_calls": [{"tool": "run_command", "args": {"command": command}}],
+                "done": True,
+            }
+        )
+    )
+    service = AgentService(
+        model_client=model_client,
+        workspace=workspace,
+        shell_runner=shell_runner,
+    )
+
+    result = service.run_turn(TaskIntent(prompt="Run one command"))
+
+    assert result.summary == "Ran verification command."
+    assert len(result.tool_actions) == 1
+    assert result.tool_actions[0].kind == "command"
+    assert result.tool_actions[0].exit_code == 0
+    assert result.tool_actions[0].stdout.strip() == "ok"
+
+
+def test_agent_service_appends_messages_across_turns(tmp_path: Path) -> None:
+    workspace = Workspace(tmp_path)
+    shell_runner = ShellRunner(tmp_path)
+    model_client = DummyModelClient(
+        [
+            '{"summary":"first turn","done":true}',
+            '{"summary":"second turn","done":true}',
+        ]
+    )
+    service = AgentService(
+        model_client=model_client,
+        workspace=workspace,
+        shell_runner=shell_runner,
+    )
+
+    first = service.run_turn(TaskIntent(prompt="first question"))
+    second = service.run_turn(TaskIntent(prompt="second question"))
+
+    assert first.summary == "first turn"
+    assert second.summary == "second turn"
+    assert len(model_client.messages) == 2
+    second_call_payload = "\n".join(item["content"] for item in model_client.messages[1])
+    assert "first question" in second_call_payload
+    assert "first turn" in second_call_payload
+    assert "second question" in second_call_payload

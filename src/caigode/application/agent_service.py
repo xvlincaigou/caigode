@@ -3,15 +3,27 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import platform
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 
+from caigode.application.tool_runtime import (
+    ToolCall,
+    ToolRuntime,
+    list_top_level_entries,
+    workspace_root,
+)
 from caigode.domain.task import (
     AgentTurnResult,
     TaskIntent,
     ToolAction,
     VerificationResult,
 )
+from caigode.infra.openai_client import OpenAIAPIError
+
+SUMMARY_CHAR_BUDGET = 24000
 
 
 class AgentPlanError(ValueError):
@@ -25,21 +37,14 @@ class ModelClient(Protocol):
         """Return an object with a string ``content`` attribute."""
 
 
-class WorkspaceTool(Protocol):
-    """Workspace operations required by the agent service."""
+@dataclass(frozen=True)
+class AgentTurnPlan:
+    """One model response normalized for execution."""
 
-    def read_text(self, path: str) -> Any:
-        """Read a workspace file and return an object with ``content``."""
-
-    def write_text(self, path: str, content: str) -> Any:
-        """Write a workspace file and return an object with ``path``."""
-
-
-class ShellTool(Protocol):
-    """Shell operations required by the agent service."""
-
-    def run(self, command: str) -> Any:
-        """Execute a command and return an object with process fields."""
+    summary: str | None
+    writes: tuple[dict[str, str], ...]
+    tool_calls: tuple[ToolCall, ...]
+    done: bool | None
 
 
 @dataclass
@@ -47,35 +52,34 @@ class AgentService:
     """Coordinate model planning, local file changes, and verification."""
 
     model_client: ModelClient
-    workspace: WorkspaceTool
-    shell_runner: ShellTool
+    workspace: Any
+    shell_runner: Any
+    _messages: list[dict[str, str]] = field(default_factory=list, init=False)
+    _history_compaction_count: int = field(default=0, init=False)
 
     def run_turn(self, intent: TaskIntent) -> AgentTurnResult:
         """Execute one model-guided turn and return structured results."""
 
-        context_payloads, read_actions = self._load_context(intent.context_files)
-        response = self.model_client.create_chat_completion(
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": self._build_user_prompt(intent, context_payloads),
-                },
-            ]
-        )
-        raw_response = str(getattr(response, "content", ""))
-        plan = _parse_plan(raw_response)
+        runtime_context = self._build_runtime_context()
+        self._ensure_session_initialized(runtime_context)
 
+        context_payloads, read_actions = self._load_context(intent.context_files)
         tool_actions = list(read_actions)
-        for write in plan["writes"]:
-            write_result = self.workspace.write_text(write["path"], write["content"])
-            tool_actions.append(
-                ToolAction(
-                    kind="write",
-                    target=str(write_result.path),
-                    detail=f"{write_result.bytes_written} bytes",
-                )
-            )
+        runtime = ToolRuntime(workspace=self.workspace, shell_runner=self.shell_runner)
+        user_message = {
+            "role": "user",
+            "content": self._build_user_prompt(intent, context_payloads, runtime_context),
+        }
+        self._messages.append(user_message)
+
+        try:
+            summary, raw_response = self._run_agent_loop(runtime, tool_actions)
+        except Exception as exc:
+            if not _is_ooc_error(exc):
+                raise
+            self._compact_session_for_ooc(runtime_context)
+            self._messages.append(user_message)
+            summary, raw_response = self._run_agent_loop(runtime, tool_actions)
 
         verification_results: list[VerificationResult] = []
         for command in intent.verification_commands:
@@ -101,13 +105,52 @@ class AgentService:
 
         return AgentTurnResult(
             prompt=intent.prompt,
-            summary=plan["summary"],
+            summary=summary,
             raw_response=raw_response,
             tool_actions=tuple(tool_actions),
             verification_results=tuple(verification_results),
         )
 
-    def _load_context(self, context_files: tuple[str, ...]) -> tuple[list[dict[str, str]], list[ToolAction]]:
+    def _run_agent_loop(
+        self,
+        runtime: ToolRuntime,
+        tool_actions: list[ToolAction],
+    ) -> tuple[str, str]:
+        while True:
+            response = self.model_client.create_chat_completion(messages=self._messages)
+            raw_response = str(getattr(response, "content", ""))
+            self._messages.append({"role": "assistant", "content": raw_response})
+            plan = _parse_plan(raw_response)
+
+            tool_results: list[dict[str, Any]] = []
+            for write in plan.writes:
+                tool_results.append(
+                    runtime.execute_write_file(
+                        path=write["path"],
+                        content=write["content"],
+                        tool_actions=tool_actions,
+                    )
+                )
+            for tool_call in plan.tool_calls:
+                tool_results.append(runtime.execute_tool_call(tool_call, tool_actions))
+
+            if tool_results:
+                self._messages.append(
+                    {"role": "user", "content": _build_tool_results_prompt(tool_results)}
+                )
+
+            should_finish = plan.done if plan.done is not None else not plan.tool_calls
+            if should_finish:
+                return plan.summary or _fallback_summary(tool_results), raw_response
+
+            if not plan.tool_calls and not plan.writes:
+                raise AgentPlanError(
+                    "Model requested continuation without tool_calls or writes"
+                )
+
+    def _load_context(
+        self, context_files: tuple[str, ...]
+    ) -> tuple[list[dict[str, str]], list[ToolAction]]:
         payloads: list[dict[str, str]] = []
         actions: list[ToolAction] = []
         for path in context_files:
@@ -122,37 +165,153 @@ class AgentService:
             )
         return payloads, actions
 
+    def _ensure_session_initialized(self, runtime_context: dict[str, Any]) -> None:
+        if self._messages:
+            return
+        self._messages = [
+            {"role": "system", "content": _build_system_prompt(runtime_context)}
+        ]
+
+    def _build_runtime_context(self) -> dict[str, Any]:
+        root = workspace_root(self.workspace)
+        return {
+            "identity": "caigode",
+            "python_version": platform.python_version(),
+            "platform": platform.platform(),
+            "workspace_root": str(root) if root is not None else None,
+            "cwd": str(root) if root is not None else None,
+            "top_level_entries": list_top_level_entries(root),
+            "git": _collect_git_context(root),
+        }
+
     def _build_user_prompt(
         self,
         intent: TaskIntent,
         context_payloads: list[dict[str, str]],
+        runtime_context: dict[str, Any],
     ) -> str:
         payload = {
             "task": intent.prompt,
+            "runtime_context": runtime_context,
             "context_files": context_payloads,
+            "available_tools": [
+                {
+                    "name": "list_dir",
+                    "args": {
+                        "path": "relative/or/absolute/path (optional, default '.')",
+                        "recursive": "bool (optional, default false)",
+                        "max_entries": "int (optional, default 200, max 1000)",
+                    },
+                },
+                {"name": "read_file", "args": {"path": "relative/or/absolute/path"}},
+                {
+                    "name": "write_file",
+                    "args": {
+                        "path": "relative/or/absolute/path",
+                        "content": "full file content",
+                    },
+                },
+                {
+                    "name": "run_command",
+                    "args": {"command": "shell command executed in workspace root"},
+                },
+            ],
             "required_response_schema": {
-                "summary": "string",
-                "writes": [{"path": "relative/path.txt", "content": "full file content"}],
+                "summary": "string (required when done=true or when no tool_calls)",
+                "writes": [
+                    {"path": "relative/path.txt", "content": "full file content"}
+                ],
+                "tool_calls": [
+                    {"tool": "tool_name", "args": {"key": "value"}}
+                ],
+                "done": "boolean (optional)",
             },
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
+    def _compact_session_for_ooc(self, runtime_context: dict[str, Any]) -> None:
+        summary = self._summarize_history_with_model()
+        self._history_compaction_count += 1
+        self._messages = [
+            {"role": "system", "content": _build_system_prompt(runtime_context)},
+            {
+                "role": "system",
+                "content": (
+                    "Conversation was compacted due to out-of-context. "
+                    f"Compaction #{self._history_compaction_count}. "
+                    "Use this summary as prior context:\n"
+                    f"{summary}"
+                ),
+            },
+        ]
 
-_SYSTEM_PROMPT = (
-    "You are a coding agent. "
-    "Return strict JSON with keys summary and writes. "
-    "Each write must contain path and content."
-)
+    def _summarize_history_with_model(self) -> str:
+        transcript = _render_transcript_for_summary(self._messages)
+        prompt_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Summarize the coding conversation for continuation.\n"
+                    "Keep concrete facts: goals, decisions, files edited, open tasks, errors.\n"
+                    "Output plain text only."
+                ),
+            },
+            {"role": "user", "content": transcript},
+        ]
+        try:
+            response = self.model_client.create_chat_completion(messages=prompt_messages)
+        except Exception:
+            return _fallback_history_summary(self._messages)
+        content = str(getattr(response, "content", "")).strip()
+        if not content:
+            return _fallback_history_summary(self._messages)
+        return content
 
 
-def _parse_plan(raw_response: str) -> dict[str, Any]:
+def _build_system_prompt(runtime_context: dict[str, Any]) -> str:
+    return (
+        "You are caigode, a coding agent running in a local terminal workspace.\n"
+        "Use runtime_context as ground truth for where you are running.\n"
+        "If the user asks to edit files in 'this folder', treat workspace_root/cwd as that folder.\n"
+        "To inspect files, call tools (list_dir/read_file) instead of asking for paths first.\n"
+        "Return strict JSON only.\n"
+        "You can return legacy writes, or prefer tool_calls with optional done.\n"
+        f"Runtime context snapshot:\n{json.dumps(runtime_context, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _build_tool_results_prompt(results: list[dict[str, Any]]) -> str:
+    return json.dumps(
+        {
+            "tool_results": results,
+            "instruction": (
+                "If the task is complete, return final summary with done=true. "
+                "If more work is needed, return next tool_calls with done=false."
+            ),
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def _parse_plan(raw_response: str) -> AgentTurnPlan:
     payload = _load_json(raw_response)
     summary = payload.get("summary")
-    writes = payload.get("writes")
-    if not isinstance(summary, str) or not summary.strip():
-        raise AgentPlanError("Model response must include a non-empty summary")
+    writes = payload.get("writes", [])
+    tool_calls = payload.get("tool_calls", [])
+    done = payload.get("done")
+
+    if summary is not None:
+        if not isinstance(summary, str) or not summary.strip():
+            raise AgentPlanError("summary must be a non-empty string when provided")
+        summary = summary.strip()
+
     if not isinstance(writes, list):
-        raise AgentPlanError("Model response must include a writes list")
+        raise AgentPlanError("writes must be a list")
+    if not isinstance(tool_calls, list):
+        raise AgentPlanError("tool_calls must be a list")
+    if done is not None and not isinstance(done, bool):
+        raise AgentPlanError("done must be a boolean when provided")
 
     normalized_writes: list[dict[str, str]] = []
     for item in writes:
@@ -166,7 +325,27 @@ def _parse_plan(raw_response: str) -> dict[str, Any]:
             raise AgentPlanError("Each write entry must include string content")
         normalized_writes.append({"path": path, "content": content})
 
-    return {"summary": summary.strip(), "writes": normalized_writes}
+    normalized_calls: list[ToolCall] = []
+    for item in tool_calls:
+        if not isinstance(item, dict):
+            raise AgentPlanError("Each tool_call entry must be an object")
+        tool = item.get("tool")
+        args = item.get("args", {})
+        if not isinstance(tool, str) or not tool.strip():
+            raise AgentPlanError("Each tool_call must include a non-empty tool")
+        if not isinstance(args, dict):
+            raise AgentPlanError("Each tool_call args must be an object")
+        normalized_calls.append(ToolCall(tool=tool.strip(), args=args))
+
+    if summary is None and not normalized_writes and not normalized_calls:
+        raise AgentPlanError("Model response must include summary, writes, or tool_calls")
+
+    return AgentTurnPlan(
+        summary=summary,
+        writes=tuple(normalized_writes),
+        tool_calls=tuple(normalized_calls),
+        done=done,
+    )
 
 
 def _load_json(raw_response: str) -> dict[str, Any]:
@@ -182,3 +361,75 @@ def _load_json(raw_response: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise AgentPlanError("Model response JSON must be an object")
     return payload
+
+
+def _collect_git_context(root: Path | None) -> dict[str, Any]:
+    if root is None:
+        return {"inside_worktree": False}
+    inside = _run_git(root, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return {"inside_worktree": False}
+    branch = _run_git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    status = _run_git(root, "status", "--short")
+    return {
+        "inside_worktree": True,
+        "branch": branch.stdout.strip() if branch.returncode == 0 else None,
+        "status_short": status.stdout.splitlines()[:20] if status.returncode == 0 else [],
+    }
+
+
+def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ("git", *args),
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _is_ooc_error(exc: Exception) -> bool:
+    if isinstance(exc, OpenAIAPIError):
+        lowered = exc.message.lower()
+        if exc.status_code in {400, 413} and (
+            "context" in lowered
+            or "token" in lowered
+            or "maximum" in lowered
+            or "too long" in lowered
+        ):
+            return True
+    message = str(exc).lower()
+    if "out of context" in message or "context length" in message:
+        return True
+    return False
+
+
+def _render_transcript_for_summary(messages: list[dict[str, str]]) -> str:
+    lines: list[str] = []
+    current = 0
+    for msg in reversed(messages):
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        rendered = f"[{role}]\n{content}\n"
+        if current + len(rendered) > SUMMARY_CHAR_BUDGET:
+            break
+        lines.append(rendered)
+        current += len(rendered)
+    lines.reverse()
+    return "\n".join(lines)
+
+
+def _fallback_history_summary(messages: list[dict[str, str]]) -> str:
+    turns = sum(1 for msg in messages if msg.get("role") == "user")
+    return f"Conversation with {turns} user turns. Resume from latest user request."
+
+
+def _fallback_summary(tool_results: list[dict[str, Any]]) -> str:
+    if not tool_results:
+        return "No changes were required."
+    success_count = sum(1 for item in tool_results if item.get("ok") is True)
+    failure_count = sum(1 for item in tool_results if item.get("ok") is False)
+    return (
+        f"Executed {len(tool_results)} action(s): "
+        f"{success_count} succeeded, {failure_count} failed."
+    )

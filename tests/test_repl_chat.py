@@ -36,6 +36,24 @@ class FailIfCalledOpenAIChatClient:
         raise AssertionError(f"model should not be called: {messages}")
 
 
+class FailThenSucceedOpenAIChatClient:
+    def __init__(self, **_: str) -> None:
+        self.calls = 0
+
+    def create_chat_completion(self, *, messages: list[dict[str, str]]) -> FakeModelResponse:
+        self.calls += 1
+        if self.calls == 1:
+            raise TimeoutError("mock timeout")
+        return FakeModelResponse(
+            json.dumps(
+                {
+                    "summary": "Recovered after timeout.",
+                    "writes": [],
+                }
+            )
+        )
+
+
 def test_chat_command_executes_one_turn_and_persists_session(
     tmp_path: Path,
     monkeypatch,
@@ -122,3 +140,43 @@ def test_chat_command_exits_without_running_a_turn(
     assert "Chat session:" in output
     assert "Chat session ended:" in output
     assert StateStore(state_dir).list_sessions() == ()
+
+
+def test_chat_command_continues_after_failed_turn(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        "caigode.interface.repl.OpenAIChatClient",
+        FailThenSucceedOpenAIChatClient,
+    )
+    prompts = iter(["first", "second", "quit"])
+    monkeypatch.setattr("builtins.input", lambda _: next(prompts))
+    state_dir = tmp_path / ".caigode"
+
+    exit_code = main(
+        [
+            "chat",
+            "--workspace",
+            str(tmp_path),
+            "--state-dir",
+            str(state_dir),
+            "--model",
+            "demo-model",
+            "--base-url",
+            "https://example.test/v1",
+            "--api-key",
+            "secret",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    sessions = StateStore(state_dir).list_sessions()
+
+    assert exit_code == 0
+    assert "Turn status: failed" in output
+    assert "Turn status: success" in output
+    assert len(sessions) == 1
+    assert sessions[0].result is not None
+    assert sessions[0].result.summary == "Recovered after timeout."
