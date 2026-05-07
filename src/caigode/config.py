@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Mapping
 
@@ -40,8 +41,9 @@ def load_config(
 ) -> AgentConfig:
     """Merge CLI arguments with environment variables and validate them."""
 
-    env = environ or {}
     base_path = _resolve_cwd(cwd)
+    dotenv_env = _load_dotenv(base_path / ".env")
+    env = _merge_env(environ=environ, dotenv_env=dotenv_env)
 
     resolved_model = _coalesce(model, env.get(OPENAI_MODEL_ENV))
     resolved_base_url = _coalesce(base_url, env.get(OPENAI_BASE_URL_ENV))
@@ -68,6 +70,42 @@ def load_config(
         workspace=workspace_path,
         state_dir=state_dir_path,
     )
+
+
+def _merge_env(
+    *, environ: Mapping[str, str] | None, dotenv_env: Mapping[str, str]
+) -> dict[str, str]:
+    env: dict[str, str] = dict(dotenv_env)
+    source = os.environ if environ is None else environ
+    env.update(source)
+    return env
+
+
+def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
+    if not dotenv_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = _strip_quotes(value.strip())
+    return values
+
+
+def _strip_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
 
 
 def _resolve_cwd(cwd: str | Path | None) -> Path:
